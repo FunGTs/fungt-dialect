@@ -9,7 +9,8 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Rewrite/FrozenRewritePatternSet.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "FunGT/FunGTPasses.h"
 
 namespace mlir::fungt {
@@ -43,5 +44,34 @@ public:
       signalPassFailure();
   }
 };
+} // namespace
+#define GEN_PASS_DEF_FUNGTLOWERTOARITH
+#include "FunGT/FunGTPasses.h.inc"
+
+namespace {
+
+class ScalarMulLowering : public OpRewritePattern<ScalarMulOp> {
+public:
+    using OpRewritePattern::OpRewritePattern;
+    LogicalResult matchAndRewrite(ScalarMulOp op,
+                                  PatternRewriter &rewriter) const override {
+        rewriter.replaceOpWithNewOp<arith::MulFOp>(op, op.getLhs(), op.getRhs());
+        return success();
+    }
+};
+
+class FunGTLowerToArith
+    : public impl::FunGTLowerToArithBase<FunGTLowerToArith> {
+public:
+    using impl::FunGTLowerToArithBase<FunGTLowerToArith>::FunGTLowerToArithBase;
+    void runOnOperation() final {
+        RewritePatternSet patterns(&getContext());
+        patterns.add<ScalarMulLowering>(&getContext());
+        FrozenRewritePatternSet patternSet(std::move(patterns));
+        if (failed(applyPatternsGreedily(getOperation(), patternSet)))
+            signalPassFailure();
+    }
+};
+
 } // namespace
 } // namespace mlir::fungt
