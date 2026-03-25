@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-
+#include "mlir/IR/OpImplementation.h"
 #include "FunGT/FunGTOps.h"
 #include "FunGT/FunGTDialect.h"
 

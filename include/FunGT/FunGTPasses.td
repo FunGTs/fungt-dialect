@@ -26,5 +26,16 @@ def FunGTSwitchBarFoo: Pass<"fungt-switch-bar-foo", "::mlir::ModuleOp"> {
     ```
   }];
 }
+def FunGTLowerToArith: Pass<"fungt-lower-to-arith", "::mlir::ModuleOp"> {
+  let summary = "Lower FunGT dialect ops to arith and math dialect ops.";
+  let description = [{
+    Lowers fungt.scalar_mul to arith.mulf, fungt.distance to a sequence
+    of arith and math ops, and fungt.select to arith.select.
+  }];
+  let dependentDialects = [
+    "mlir::arith::ArithDialect",
+    "mlir::math::MathDialect"
+  ];
+}
 
 #endif // FUNGT_PASS
