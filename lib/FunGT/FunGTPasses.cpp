@@ -59,7 +59,16 @@ public:
         return success();
     }
 };
-
+class SelectLowering : public OpRewritePattern<SelectOp> {
+public:
+    using OpRewritePattern::OpRewritePattern;
+    LogicalResult matchAndRewrite(SelectOp op,
+                                  PatternRewriter &rewriter) const override {
+        rewriter.replaceOpWithNewOp<arith::SelectOp>(
+            op, op.getCondition(), op.getTrueVal(), op.getFalseVal());
+        return success();
+    }
+};
 class FunGTLowerToArith
     : public impl::FunGTLowerToArithBase<FunGTLowerToArith> {
 public:
