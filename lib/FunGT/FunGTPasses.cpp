@@ -76,6 +76,7 @@ public:
     void runOnOperation() final {
         RewritePatternSet patterns(&getContext());
         patterns.add<ScalarMulLowering>(&getContext());
+        patterns.add<SelectLowering>(&getContext());
         FrozenRewritePatternSet patternSet(std::move(patterns));
         if (failed(applyPatternsGreedily(getOperation(), patternSet)))
             signalPassFailure();
