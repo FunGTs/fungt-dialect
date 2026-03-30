@@ -69,6 +69,30 @@ public:
         return success();
     }
 };
+class DistanceLowering : public OpRewritePattern<DistanceOp>{
+
+public: 
+    using OpRewritePattern::OpRewritePattern;
+
+     LogicalResult matchAndRewrite(DistanceOp op,
+                                   PatternRewriter &rewriter) const override {
+        auto dx = rewriter.create<arith::SubFOp>(op.getLoc(), op.getX0(), op.getX1());   
+        auto dy = rewriter.create<arith::SubFOp>(op.getLoc(), op.getY0(), op.getY1());        
+        auto dz = rewriter.create<arith::SubFOp>(op.getLoc(), op.getZ0(), op.getZ1());
+        
+        auto dx2 = rewriter.create<arith::MulFOp>(op.getLoc(), dx.getResult(), dx.getResult());
+        auto dy2 = rewriter.create<arith::MulFOp>(op.getLoc(),dy.getResult(), dy.getResult());
+        auto dz2 = rewriter.create<arith::MulFOp>(op.getLoc(),dz.getResult(), dz.getResult());
+
+        auto sum1 = rewriter.create<arith::AddFOp>(op.getLoc(),dx2.getResult(),dy2.getResult());
+        auto sum2 = rewriter.create<arith::AddFOp>(op.getLoc(),sum1.getResult(),dz2.getResult());
+
+        rewriter.replaceOpWithNewOp<math::SqrtOp>(op, sum2);
+        return success();
+
+    }
+
+};
 class FunGTLowerToArith
     : public impl::FunGTLowerToArithBase<FunGTLowerToArith> {
 public:
@@ -77,6 +101,7 @@ public:
         RewritePatternSet patterns(&getContext());
         patterns.add<ScalarMulLowering>(&getContext());
         patterns.add<SelectLowering>(&getContext());
+        patterns.add<DistanceLowering>(&getContext());
         FrozenRewritePatternSet patternSet(std::move(patterns));
         if (failed(applyPatternsGreedily(getOperation(), patternSet)))
             signalPassFailure();
