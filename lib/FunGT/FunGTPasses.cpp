@@ -93,6 +93,42 @@ public:
     }
 
 };
+class UpdateLowering : public OpRewritePattern<Update> {
+public:
+    using OpRewritePattern::OpRewritePattern;
+    LogicalResult matchAndRewrite(Update op,
+                                  PatternRewriter &rewriter) const override {
+        Block &body = op.getBody().front();
+
+        // Map block arguments to the update op's input arguments
+        for (auto [blockArg, operand] :
+             llvm::zip(body.getArguments(), op.getOperands())) {
+            blockArg.replaceAllUsesWith(operand);
+        }
+
+        // Find the yield terminator
+        auto yieldOp = cast<YieldOp>(body.getTerminator());
+
+        // Replace update results with yield arguments
+        for (auto [result, yieldArg] :
+             llvm::zip(op.getResults(), yieldOp.getOperands())) {
+            result.replaceAllUsesWith(yieldArg);
+        }
+
+        // Move all ops from the region body to before the update op
+        rewriter.setInsertionPoint(op);
+        for (auto &bodyOp : llvm::make_early_inc_range(body.without_terminator())) {
+            bodyOp.moveBefore(op);
+        }
+
+        // Erase yield and update
+        rewriter.eraseOp(yieldOp);
+        rewriter.eraseOp(op);
+
+        return success();
+    }
+};
+//This is the pass
 class FunGTLowerToArith
     : public impl::FunGTLowerToArithBase<FunGTLowerToArith> {
 public:
@@ -102,6 +138,7 @@ public:
         patterns.add<ScalarMulLowering>(&getContext());
         patterns.add<SelectLowering>(&getContext());
         patterns.add<DistanceLowering>(&getContext());
+        patterns.add<UpdateLowering>(&getContext());
         FrozenRewritePatternSet patternSet(std::move(patterns));
         if (failed(applyPatternsGreedily(getOperation(), patternSet)))
             signalPassFailure();

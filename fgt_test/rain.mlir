@@ -1,6 +1,7 @@
 func.func @test_rain(%pos_x: f32, %pos_y: f32, %pos_z: f32,
                       %vel_x: f32, %vel_y: f32, %vel_z: f32,
-                      %mass: f32, %dt: f32, %age: f32) {
+                      %mass: f32, %dt: f32, %age: f32)
+                      -> (f32, f32, f32, f32, f32, f32, f32) {
   %results:7 = fungt.update(%pos_x, %pos_y, %pos_z,
                              %vel_x, %vel_y, %vel_z,
                              %mass, %dt, %age)
@@ -13,7 +14,7 @@ func.func @test_rain(%pos_x: f32, %pos_y: f32, %pos_z: f32,
     %new_vz = arith.addf %vz, %dv : f32
     %new_pz = arith.addf %pz, %new_vz : f32
     %new_age = arith.addf %a, %t : f32
-      fungt.yield %px, %py, %new_pz, %vx, %vy, %new_vz, %new_age : f32, f32, f32, f32, f32, f32, f32
+    fungt.yield %px, %py, %new_pz, %vx, %vy, %new_vz, %new_age : f32, f32, f32, f32, f32, f32, f32
   } : (f32, f32, f32, f32, f32, f32, f32, f32, f32) -> (f32, f32, f32, f32, f32, f32, f32)
-  return
+  return %results#0, %results#1, %results#2, %results#3, %results#4, %results#5, %results#6 : f32, f32, f32, f32, f32, f32, f32
 }
