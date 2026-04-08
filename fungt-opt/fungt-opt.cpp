@@ -21,8 +21,8 @@ int main(int argc, char **argv) {
   // TODO: Register fungt passes here.
 
   mlir::DialectRegistry registry;
-  registry.insert<mlir::fungt::FunGTDialect,
-                  mlir::arith::ArithDialect, mlir::func::FuncDialect>();
+  mlir::registerAllDialects(registry);
+  registry.insert<mlir::fungt::FunGTDialect>();
   // Add the following to include *all* MLIR Core dialects, or selectively
   // include what you need like above. You only need to register dialects that
   // will be *parsed* by the tool, not the one generated
