@@ -1,0 +1,2 @@
+./build/bin/fungt-opt --convert-gpu-to-spirv --spirv-lower-abi-attrs --spirv-update-vce fgt_test/rain_gpu.mlir > fgt_test/rain_spirv.mlir
+./build/bin/fungt-translate --fungt-to-spirv fgt_test/rain_spirv.mlir -o fgt_test/rain.spv
