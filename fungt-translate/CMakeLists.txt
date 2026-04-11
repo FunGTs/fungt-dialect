@@ -19,6 +19,8 @@ target_link_libraries(fungt-translate
   MLIRSPIRVDialect
   MLIRTranslateLib
   MLIRSupport
+  MLIRSPIRVDialect
+  MLIRSPIRVSerialization
   )
 
 mlir_check_link_libraries(fungt-translate)
