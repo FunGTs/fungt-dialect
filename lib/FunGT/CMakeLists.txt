@@ -3,7 +3,8 @@ add_mlir_dialect_library(MLIRFunGT
         FunGTDialect.cpp
         FunGTOps.cpp
         FunGTPasses.cpp
-
+        FunGTIRParser.cpp
+        
         ADDITIONAL_HEADER_DIRS
         ${PROJECT_SOURCE_DIR}/include/FunGT
 

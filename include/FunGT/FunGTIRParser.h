@@ -1,6 +1,6 @@
 #if !defined(_FUNGT_IR_PARSER_H_)
 #define _FUNGT_IR_PARSER_H_
-
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OwningOpRef.h"

@@ -1,0 +1,6 @@
+update rain:
+    gravity = -9.8
+    new_vz = vel_z + gravity * dt
+    new_pz = pos_z + new_vz * dt
+    new_age = age + dt
+    yield pos_x, pos_y, new_pz, vel_x, vel_y, new_vz, new_age

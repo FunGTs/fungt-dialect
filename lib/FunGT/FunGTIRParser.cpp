@@ -366,6 +366,7 @@ parseFunGTIR(mlir::MLIRContext &ctx, llvm::StringRef source) {
     ctx.loadDialect<fungt::FunGTDialect>();
     ctx.loadDialect<arith::ArithDialect>();
     ctx.loadDialect<math::MathDialect>();
+    ctx.loadDialect<func::FuncDialect>();
 
     auto loc = mlir::UnknownLoc::get(&ctx);
     mlir::OpBuilder builder(&ctx);
