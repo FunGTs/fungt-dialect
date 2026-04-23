@@ -37,5 +37,14 @@ def FunGTLowerToArith: Pass<"fungt-lower-to-arith", "::mlir::ModuleOp"> {
     "mlir::math::MathDialect"
   ];
 }
+def FunGTLowerToGPU: Pass<"fungt-lower-to-gpu", "::mlir::ModuleOp"> {
+  let summary = "Lower FunGT update op to GPU kernel in gpu.module.";
+  let dependentDialects = [
+    "mlir::gpu::GPUDialect",
+    "mlir::memref::MemRefDialect",
+    "mlir::arith::ArithDialect",
+    "mlir::spirv::SPIRVDialect"
+  ];
+}
 
 #endif // FUNGT_PASS
