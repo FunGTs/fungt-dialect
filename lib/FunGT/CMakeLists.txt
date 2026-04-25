@@ -18,4 +18,7 @@ add_mlir_dialect_library(MLIRFunGT
         MLIRFuncDialect
         MLIRArithDialect
         MLIRMathDialect
+        MLIRGPUDialect
+        MLIRMemRefDialect
+        MLIRSPIRVDialect
         )
