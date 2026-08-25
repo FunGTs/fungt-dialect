@@ -11,6 +11,7 @@
 include "FunGT/FunGTTypes.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
 include "mlir/IR/OpAsmInterface.td"
 
 def FunGT_DistanceOp : FunGT_Op<"distance", [Pure]> {
@@ -85,5 +86,36 @@ def FunGT_SelectOp : FunGT_Op<"select", [Pure]> {
     let assemblyFormat = [{
     $condition `,` $true_val `,` $false_val attr-dict `:` type($result)
     }];
+}
+def FunGT_ResourceBindingOp : FunGT_Op<"resource_binding", [Symbol]>{ //Using Symbol: declares a named entity other ops wil reference by symbol    
+    let summary   = "Declares a shader resource to bind";
+    let arguments = (ins SymbolNameAttr:$sym_name, StrAttr:$storage_class,
+                         I32Attr:$set, I32Attr:$binding,
+                         TypeAttrOf<AnyType>:$resource_type);
+
+     let assemblyFormat = [{
+        $sym_name `storage_class` `(` $storage_class `)`
+        `layout` `(` `set` `=` $set `,` `binding` `=` $binding `)`
+        attr-dict `:` $resource_type
+    }];
+    let hasVerifier = 1;
+
+}
+def FunGT_ShaderEntryOp : FunGT_Op<"shader_entry", [Symbol]> {
+  let summary = "Declares a shader entry point.";
+  let arguments = (ins
+    SymbolNameAttr:$sym_name,
+    StrAttr:$execution_model
+  );
+  let regions = (region SizedRegion<1>:$body);
+  let assemblyFormat = [{
+    $sym_name `execution_model` `(` $execution_model `)` $body attr-dict
+  }];
+  let hasVerifier = 1;
+}
+
+def FunGT_ShaderEndOp : FunGT_Op<"shader_end", [Terminator]> {
+  let summary = "Terminates the body for shader_entry.";
+  let assemblyFormat = "attr-dict";
 }
 #endif // FUNGT_OPS

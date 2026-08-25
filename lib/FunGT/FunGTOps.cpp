@@ -11,3 +11,25 @@
 
 #define GET_OP_CLASSES
 #include "FunGT/FunGTOps.cpp.inc"
+namespace mlir::fungt {
+
+LogicalResult ResourceBindingOp::verify() {
+  llvm::StringRef storageClass = getStorageClass();
+  if (storageClass != "UniformConstant" &&
+      storageClass != "Uniform" &&
+      storageClass != "StorageBuffer") {
+    return emitOpError("storage_class must be one of UniformConstant, "
+                        "Uniform, or StorageBuffer, got '")
+           << storageClass << "'";
+  }
+  return success();
+}
+LogicalResult ShaderEntryOp::verify() {
+  llvm::StringRef executionModel = getExecutionModel();
+  if (executionModel != "Vertex" && executionModel != "Fragment") {
+    return emitOpError("execution_model must be 'Vertex' or 'Fragment', got '")
+           << executionModel << "'";
+  }
+  return success();
+}
+} // namespace mlir::fungt

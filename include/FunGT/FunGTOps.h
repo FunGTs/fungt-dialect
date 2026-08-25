@@ -8,7 +8,8 @@
 
 #ifndef FUNGT_FUNGTOPS_H
 #define FUNGT_FUNGTOPS_H
-
+#include "mlir/IR/SymbolTable.h"
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
