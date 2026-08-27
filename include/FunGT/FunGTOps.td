@@ -118,4 +118,31 @@ def FunGT_ShaderEndOp : FunGT_Op<"shader_end", [Terminator]> {
   let summary = "Terminates the body for shader_entry.";
   let assemblyFormat = "attr-dict";
 }
+
+def FunGT_ConstVec4Op : FunGT_Op<"const_vec4",[Pure]>{
+
+    let summary   = "Constant 4 float vector";
+    let arguments = (ins F32Attr:$xval, F32Attr:$yval, F32Attr:$zval, F32Attr:$wval);
+    /*
+        VectorOfLengthAndType<[4], [F32]>:$result, a real MLIR constraint from CommonTypeConstraints.td,
+        it restricts the result type to specifically a 4-element vector of f32. 
+        So %color = fungt.const_vec4 ... : vector<4xf32> is legal but a mistyped vector<3xf32>
+        would be rejected at verification
+    */
+    let results   = (outs VectorOfLengthAndType<[4], [F32]>:$result);
+    let assemblyFormat = [{
+
+        $xval `,` $yval `,` $zval `,` $wval attr-dict `:` type($result)
+    
+    }];
+
+}
+def FunGT_OutputOp : FunGT_Op<"output", []> {
+  let summary = "Writes a value to a location decorated shader output.";
+  let arguments = (ins AnyType:$value, ConfinedAttr<I32Attr, [IntNonNegative]>:$location);
+  let assemblyFormat = [{
+    $value `location` `(` $location `)` attr-dict `:` type($value)
+  }];
+}
+
 #endif // FUNGT_OPS

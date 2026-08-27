@@ -32,4 +32,5 @@ LogicalResult ShaderEntryOp::verify() {
   }
   return success();
 }
+
 } // namespace mlir::fungt
