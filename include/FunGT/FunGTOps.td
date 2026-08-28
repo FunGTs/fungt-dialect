@@ -144,5 +144,12 @@ def FunGT_OutputOp : FunGT_Op<"output", []> {
     $value `location` `(` $location `)` attr-dict `:` type($value)
   }];
 }
-
+def FunGT_InputOp : FunGT_Op<"input", [Pure]> {
+  let summary = "Reads a value from a location decorated shader input.";
+  let arguments = (ins ConfinedAttr<I32Attr, [IntNonNegative]>:$location);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    `location` `(` $location `)` attr-dict `:` type($result)
+  }];
+}
 #endif // FUNGT_OPS

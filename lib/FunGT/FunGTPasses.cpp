@@ -12,7 +12,10 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "FunGT/FunGTPasses.h"
-
+#include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVAttributes.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVEnums.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
 namespace mlir::fungt {
 #define GEN_PASS_DEF_FUNGTSWITCHBARFOO
 #include "FunGT/FunGTPasses.h.inc"
@@ -146,4 +149,151 @@ public:
 };
 
 } // namespace
+
+// ================= HERE STARTS: FunGTShaderLowerToSPIRV =================
+#define GEN_PASS_DEF_FUNGTSHADERLOWERTOSPIRV
+#include "FunGT/FunGTPasses.h.inc"
+
+namespace {
+
+class ShaderEntryLowering : public OpRewritePattern<ShaderEntryOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ShaderEntryOp op,
+                                 PatternRewriter &rewriter) const override {
+    auto moduleOp = op->getParentOfType<ModuleOp>();
+    rewriter.setInsertionPointToStart(moduleOp.getBody());
+
+    auto spvModule = rewriter.create<spirv::ModuleOp>(
+        op.getLoc(), spirv::AddressingModel::Logical,
+        spirv::MemoryModel::GLSL450,
+        spirv::VerCapExtAttr::get(
+            spirv::Version::V_1_0, {spirv::Capability::Shader}, {},
+            rewriter.getContext()));
+
+    rewriter.setInsertionPointToStart(spvModule.getBody());
+
+    auto funcType = rewriter.getFunctionType({}, {});
+    auto spvFunc = rewriter.create<spirv::FuncOp>(
+        op.getLoc(), op.getSymName(), funcType);
+    rewriter.createBlock(&spvFunc.getBody());
+    rewriter.setInsertionPointToStart(&spvFunc.getBody().front());
+
+    llvm::DenseMap<Value, Value> valueMap;
+    SmallVector<Attribute, 2> interfaceVars;
+    int globalCounter = 0;
+
+    for (Operation &bodyOp : op.getBody().front()) {
+      if (auto constOp = dyn_cast<ConstVec4Op>(bodyOp)) {
+        SmallVector<float, 4> vals = {
+            constOp.getXval().convertToFloat(),
+            constOp.getYval().convertToFloat(),
+            constOp.getZval().convertToFloat(),
+            constOp.getWval().convertToFloat()};
+        auto vecType = VectorType::get({4}, rewriter.getF32Type());
+        auto constant = rewriter.create<spirv::ConstantOp>(
+            constOp.getLoc(), vecType,
+            DenseElementsAttr::get(vecType, ArrayRef<float>(vals)));
+        valueMap[constOp.getResult()] = constant.getResult();
+        continue;
+      }
+
+      if (auto outOp = dyn_cast<OutputOp>(bodyOp)) {
+        auto vecType = outOp.getValue().getType();
+        auto ptrType = spirv::PointerType::get(vecType,
+                                                spirv::StorageClass::Output);
+
+        std::string globalName =
+            ("out_var_" + Twine(globalCounter++)).str();
+
+        {
+          OpBuilder::InsertionGuard guard(rewriter);
+          rewriter.setInsertionPointToStart(spvModule.getBody());
+          auto globalVar = rewriter.create<spirv::GlobalVariableOp>(
+              outOp.getLoc(), ptrType, globalName,
+              /*initializer=*/nullptr);
+          globalVar->setAttr("location", outOp.getLocationAttr());
+        }
+
+        auto addr = rewriter.create<spirv::AddressOfOp>(
+            outOp.getLoc(), ptrType,
+            SymbolRefAttr::get(rewriter.getContext(), globalName));
+        rewriter.create<spirv::StoreOp>(
+            outOp.getLoc(), addr.getResult(), valueMap[outOp.getValue()]);
+
+        interfaceVars.push_back(
+            SymbolRefAttr::get(rewriter.getContext(), globalName));
+        continue;
+      }
+      if (auto inOp = dyn_cast<InputOp>(bodyOp)) {
+            auto vecType = inOp.getResult().getType();
+            auto ptrType = spirv::PointerType::get(vecType,
+                                                    spirv::StorageClass::Input);
+            std::string globalName =
+                ("in_var_" + Twine(globalCounter++)).str();
+
+            {
+                OpBuilder::InsertionGuard guard(rewriter);
+                rewriter.setInsertionPointToStart(spvModule.getBody());
+                auto globalVar = rewriter.create<spirv::GlobalVariableOp>(
+                    inOp.getLoc(), ptrType, globalName,
+                    /*initializer=*/nullptr);
+                globalVar->setAttr("location", inOp.getLocationAttr());
+            }
+
+            auto addr = rewriter.create<spirv::AddressOfOp>(
+                inOp.getLoc(), ptrType,
+                SymbolRefAttr::get(rewriter.getContext(), globalName));
+            auto loaded = rewriter.create<spirv::LoadOp>(inOp.getLoc(), addr.getResult());
+
+            valueMap[inOp.getResult()] = loaded.getResult();
+            interfaceVars.push_back(
+                SymbolRefAttr::get(rewriter.getContext(), globalName));
+            continue;
+       }
+       if (isa<ShaderEndOp>(bodyOp)) {
+            rewriter.create<spirv::ReturnOp>(bodyOp.getLoc());
+            continue;
+        }
+    }
+
+    StringRef execModelStr = op.getExecutionModel();
+    spirv::ExecutionModel execModel =
+        execModelStr == "Fragment" ? spirv::ExecutionModel::Fragment
+                                    : spirv::ExecutionModel::Vertex;
+
+    rewriter.setInsertionPointToEnd(spvModule.getBody());
+    rewriter.create<spirv::EntryPointOp>(
+        op.getLoc(), execModel, spvFunc,
+        interfaceVars);
+
+    if (execModel == spirv::ExecutionModel::Fragment) {
+      rewriter.create<spirv::ExecutionModeOp>(
+          op.getLoc(), spvFunc,
+          spirv::ExecutionMode::OriginUpperLeft, ArrayRef<int32_t>{});
+    }
+
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
+
+class FunGTShaderLowerToSPIRV
+    : public impl::FunGTShaderLowerToSPIRVBase<FunGTShaderLowerToSPIRV> {
+public:
+  using impl::FunGTShaderLowerToSPIRVBase<FunGTShaderLowerToSPIRV>::FunGTShaderLowerToSPIRVBase;
+  void runOnOperation() final {
+    RewritePatternSet patterns(&getContext());
+    patterns.add<ShaderEntryLowering>(&getContext());
+    FrozenRewritePatternSet patternSet(std::move(patterns));
+    if (failed(applyPatternsGreedily(getOperation(), patternSet)))
+      signalPassFailure();
+  }
+};
+
+} // namespace
+// ================= HERE ENDS: FunGTShaderLowerToSPIRV =================
+
+
 } // namespace mlir::fungt

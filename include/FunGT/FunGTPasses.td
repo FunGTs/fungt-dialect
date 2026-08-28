@@ -37,14 +37,17 @@ def FunGTLowerToArith: Pass<"fungt-lower-to-arith", "::mlir::ModuleOp"> {
     "mlir::math::MathDialect"
   ];
 }
-// def FunGTLowerToGPU: Pass<"fungt-lower-to-gpu", "::mlir::ModuleOp"> {
-//   let summary = "Lower FunGT update op to GPU kernel in gpu.module.";
-//   let dependentDialects = [
-//     "mlir::gpu::GPUDialect",
-//     "mlir::memref::MemRefDialect",
-//     "mlir::arith::ArithDialect",
-//     "mlir::spirv::SPIRVDialect"
-//   ];
-// }
+def FunGTShaderLowerToSPIRV: Pass<"fungt-shader-lower-to-spirv", "::mlir::ModuleOp"> {
+  let summary = "Lower FunGT shader ops to the SPIR-V dialect.";
+  let description = [{
+    Lowers fungt.shader_entry to spirv.func and spirv.EntryPoint,
+    fungt.const_vec4 to spirv.Constant, fungt.output to a
+    Location decorated spirv.GlobalVariable plus spirv.Store, and
+    fungt.shader_end to spirv.Return.
+  }];
+  let dependentDialects = [
+    "mlir::spirv::SPIRVDialect"
+  ];
+}
 
 #endif // FUNGT_PASS
