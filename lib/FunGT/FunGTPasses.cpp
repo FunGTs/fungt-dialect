@@ -160,17 +160,16 @@ class ShaderEntryLowering : public OpRewritePattern<ShaderEntryOp> {
 public:
   using OpRewritePattern::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ShaderEntryOp op,
-                                 PatternRewriter &rewriter) const override {
+  LogicalResult matchAndRewrite(ShaderEntryOp op,  PatternRewriter &rewriter) const override {
+    
     auto moduleOp = op->getParentOfType<ModuleOp>();
     rewriter.setInsertionPointToStart(moduleOp.getBody());
 
     auto spvModule = rewriter.create<spirv::ModuleOp>(
         op.getLoc(), spirv::AddressingModel::Logical,
         spirv::MemoryModel::GLSL450,
-        spirv::VerCapExtAttr::get(
-            spirv::Version::V_1_0, {spirv::Capability::Shader}, {},
-            rewriter.getContext()));
+        spirv::VerCapExtAttr::get(spirv::Version::V_1_0, {spirv::Capability::Shader}, {},rewriter.getContext())
+    );
 
     rewriter.setInsertionPointToStart(spvModule.getBody());
 
@@ -252,6 +251,15 @@ public:
                 SymbolRefAttr::get(rewriter.getContext(), globalName));
             continue;
        }
+       if ( auto loadOp = dyn_cast<LoadResourceOp>(bodyOp) ) {
+            auto ptrType = spirv::PointerType::get(
+                loadOp.getResult().getType(), spirv::StorageClass::Uniform);
+            auto addr = rewriter.create<spirv::AddressOfOp>(
+                loadOp.getLoc(), ptrType, loadOp.getBinding());
+            auto loaded = rewriter.create<spirv::LoadOp>(loadOp.getLoc(), addr.getResult());
+            valueMap[loadOp.getResult()] = loaded.getResult();
+            continue;
+        }
        if (isa<ShaderEndOp>(bodyOp)) {
             rewriter.create<spirv::ReturnOp>(bodyOp.getLoc());
             continue;
@@ -278,6 +286,42 @@ public:
     return success();
   }
 };
+class ResourceBindingLowering : public OpRewritePattern<ResourceBindingOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ResourceBindingOp op,
+                                 PatternRewriter &rewriter) const override {
+    auto moduleOp = op->getParentOfType<ModuleOp>();
+    spirv::ModuleOp spvModule;
+    for (auto m : moduleOp.getOps<spirv::ModuleOp>())  {
+      spvModule = m;
+      break;
+    }
+    if (!spvModule) return failure();
+
+    spirv::StorageClass storage_class;
+    StringRef scStr = op.getStorageClass();
+    if (scStr == "Uniform") {
+        storage_class = spirv::StorageClass::Uniform;
+    }      
+    else if (scStr == "StorageBuffer") {
+        storage_class = spirv::StorageClass::StorageBuffer;
+    }
+    else {                           
+        storage_class = spirv::StorageClass::UniformConstant;
+    }
+    auto ptrType = spirv::PointerType::get(op.getResourceType(), storage_class);
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(spvModule.getBody());
+    auto globalVar = rewriter.create<spirv::GlobalVariableOp>(
+        op.getLoc(), ptrType, op.getSymName(), nullptr);
+    globalVar->setAttr("descriptor_set", rewriter.getI32IntegerAttr(op.getSet()));
+    globalVar->setAttr("binding", rewriter.getI32IntegerAttr(op.getBinding()));
+    rewriter.eraseOp(op);
+    return success();
+  }
+};
 
 class FunGTShaderLowerToSPIRV
     : public impl::FunGTShaderLowerToSPIRVBase<FunGTShaderLowerToSPIRV> {
@@ -286,6 +330,7 @@ public:
   void runOnOperation() final {
     RewritePatternSet patterns(&getContext());
     patterns.add<ShaderEntryLowering>(&getContext());
+    patterns.add<ResourceBindingLowering>(&getContext()); 
     FrozenRewritePatternSet patternSet(std::move(patterns));
     if (failed(applyPatternsGreedily(getOperation(), patternSet)))
       signalPassFailure();

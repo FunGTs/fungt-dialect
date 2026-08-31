@@ -152,4 +152,12 @@ def FunGT_InputOp : FunGT_Op<"input", [Pure]> {
     `location` `(` $location `)` attr-dict `:` type($result)
   }];
 }
+def FunGT_LoadResourceOp : FunGT_Op<"load_resource", [Pure]> {
+  let summary = "Reads the value bound created by a resource_binding.";
+  let arguments = (ins FlatSymbolRefAttr:$binding);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $binding attr-dict `:` type($result)
+  }];
+}
 #endif // FUNGT_OPS
