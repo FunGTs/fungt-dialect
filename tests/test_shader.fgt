@@ -1,6 +1,6 @@
 // solid red fragment shader using a uniform tint
 fragment_shader {
-    uniform tint set(0) binding(0) : vec4
+    uniform color set(0) binding(0) : vec4
     color = load(tint)
     out color location(0)
 }
