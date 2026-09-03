@@ -1,93 +1,104 @@
 # fungt-dialect
 
 MLIR dialect for shader compilation, lowering to SPIR-V for use in OpenGL
-and, in the future, Vulkan.
+and Vulkan.
 
 ## Status
 
-fungt-dialect can now express `Vertex` and `Fragment` shaders in its own
-op syntax, lower them to `spirv.module` via `fungt-opt`, serialize to
-binary `.spv` via `fungt-translate`, and load the result in OpenGL via
-`GL_ARB_gl_spirv`. Validated with `spirv-val` and confirmed rendering on
-both Intel Arc and NVIDIA hardware.
-
-## Ops
-
-**fungt.shader_entry** Declares a shader entry point. Takes a symbol name
-and an execution model (`"Vertex"` or `"Fragment"`). Holds a region body
-containing shader ops, terminated by `fungt.shader_end`.
-
-**fungt.shader_end** Terminates a `shader_entry` body. No operands.
-
-**fungt.const_vec4** Constant 4-component float vector. Takes four f32
-attributes, produces a `vector<4xf32>` result.
-
-**fungt.output** Writes a value to a location decorated shader output.
-Takes a value and a non-negative location index.
-
-**fungt.input** Reads a value from a location decorated shader input.
-Takes a non-negative location index, produces a value.
-
-**fungt.resource_binding** Declares a named shader resource at a given
-descriptor set and binding index. Storage class must be `"Uniform"`,
-`"StorageBuffer"`, or `"UniformConstant"`.
-
-**fungt.load_resource** Reads the value from a named resource binding.
-Takes a symbol reference to a `fungt.resource_binding`.
-
-## Tools
-
-**fungt-opt** Runs lowering passes on fungt-dialect MLIR text input,
-producing `spirv` dialect MLIR text output. Text in, text out.
-
-**fungt-translate** Serializes `spirv` dialect MLIR to a binary `.spv`
-file. Text in, binary out.
-
-**fungt-parse** FunGT IR parser. Not yet implemented for the shading
-language surface syntax.
+fungt-dialect is a working shader compiler. A user writes a `.fgt` shader
+file, runs three commands, and gets a validated `.spv` binary ready to
+load into OpenGL or Vulkan. Confirmed rendering on both Intel Arc and
+NVIDIA hardware.
 
 ## Pipeline
 
 ```
-fungt-dialect MLIR (hand written for now)
+shader.fgt
         |
-   fungt-opt --fungt-shader-lower-to-spirv shader.mlir -o lowered.mlir
+   fungt-parse --shader shader.fgt | fungt-opt --fungt-shader-lower-to-spirv - -o lowered.mlir
         |
    fungt-translate --fungt-to-spirv lowered.mlir -o shader.spv
-        |
-   spirv-val shader.spv
         |
    OpenGL: glShaderBinary + glSpecializeShader (GL_ARB_gl_spirv)
    Vulkan: vkCreateShaderModule
 ```
 
-Both vertex and fragment shaders in a single OpenGL program must be
-SPIR-V modules. Mixing GLSL and SPIR-V shaders in the same program
-produces `GL_INVALID_OPERATION` on link, and was observed to cause a
-driver level segmentation fault in Mesa on Intel Arc hardware.
+## Surface Syntax
 
-## Example
+Users write `.fgt` files directly. No MLIR knowledge required.
 
-Solid red fragment shader using a uniform color binding:
+Fragment shader reading from a uniform and writing to an output:
 
-```mlir
-module {
-  fungt.resource_binding @tint storage_class("Uniform")
-    layout(set = 0, binding = 0) : vector<4xf32>
-
-  fungt.shader_entry @red_rect execution_model("Fragment") {
-    %val = fungt.load_resource @tint : vector<4xf32>
-    fungt.output %val location(0) : vector<4xf32>
-    fungt.shader_end
-  }
+```
+fragment_shader {
+    uniform tint set(0) binding(0) : vec4
+    color = load(tint)
+    out color location(0)
 }
 ```
 
-## Remaining Work
+Vertex shader passing an input through to an output:
 
-There is no surface syntax for shaders yet. All fungt-dialect MLIR is
-currently hand written. `fungt-parse` for the shading language is the
-next major piece of work.
+```
+vertex_shader {
+    in position location(0) : vec4
+    out gl_position location(0) : vec4
+    gl_position = position
+}
+```
+
+Supported statements inside a shader block:
+
+`uniform name set(N) binding(N) : type` declares a uniform buffer binding.
+
+`in name location(N) : type` reads from a vertex attribute or varying input.
+
+`out name location(N)` writes a named value to a shader output.
+
+`name = load(binding)` loads the value from a named uniform binding.
+
+`name = expression` assigns the result of an expression to a variable.
+
+Supported types: `vec4`
+
+Comments use `//`.
+
+## Ops
+
+**fungt.shader_entry** Declares a shader entry point with an execution
+model of `"Vertex"` or `"Fragment"`.
+
+**fungt.shader_end** Terminates a shader entry body.
+
+**fungt.const_vec4** Constant 4-component float vector.
+
+**fungt.input** Reads from a location decorated shader input.
+
+**fungt.output** Writes to a location decorated shader output.
+
+**fungt.resource_binding** Declares a named resource at a descriptor set
+and binding index. Storage class must be `"Uniform"`, `"StorageBuffer"`,
+or `"UniformConstant"`.
+
+**fungt.load_resource** Reads the value from a named resource binding.
+
+## Tools
+
+**fungt-parse** Reads a `.fgt` file and emits fungt-dialect MLIR. Use
+`--shader` flag for shader files.
+
+**fungt-opt** Runs lowering passes. `--fungt-shader-lower-to-spirv`
+lowers fungt shader ops to `spirv` dialect MLIR. Text in, text out.
+
+**fungt-translate** Serializes `spirv` dialect MLIR to a binary `.spv`
+file. Text in, binary out.
+
+## OpenGL Note
+
+Both vertex and fragment shaders in a single OpenGL program must be
+SPIR-V modules. Mixing GLSL and SPIR-V shaders in the same program
+produces `GL_INVALID_OPERATION` on link, and causes a driver level
+segmentation fault in Mesa on Intel Arc hardware.
 
 ## Building
 
@@ -101,7 +112,7 @@ cmake -G Ninja .. \
 ninja
 ```
 
-## Prior work
+## Prior Work
 
 fungt-dialect originally targeted `GLCompute` execution mode SPIR-V for
 LLM generated particle physics kernels. That work has been superseded by

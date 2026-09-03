@@ -9,8 +9,8 @@
 namespace mlir {
 namespace fungt {
 
-mlir::OwningOpRef<mlir::ModuleOp>
-parseFunGTIR(mlir::MLIRContext &ctx, llvm::StringRef source);
+mlir::OwningOpRef<mlir::ModuleOp> parseFunGTIR(mlir::MLIRContext &ctx, llvm::StringRef source);
+mlir::OwningOpRef<mlir::ModuleOp> parseShaderIR(mlir::MLIRContext &ctx, llvm::StringRef source);
 
 } // namespace fungt
 } // namespace mlir

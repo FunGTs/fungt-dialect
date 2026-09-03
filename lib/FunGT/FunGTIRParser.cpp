@@ -5,6 +5,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -21,6 +22,7 @@ enum class TokenKind {
     EQUALS, LESS, GREATER,
     LPAREN, RPAREN,
     COMMA, COLON, NEWLINE,
+    LBRACE, RBRACE,
     TOK_EOF
 };
 
@@ -41,12 +43,16 @@ public:
     Tokenizer(llvm::StringRef src) : source(src), pos(0), line(1), col(1) {}
 
     std::vector<Token> tokenize() {
-        std::vector<Token> tokens;
+        std::vector<Token> m_tokens;
         while (pos < source.size()) {
             char c = source[pos];
 
-            if (c == '#') {
-                while (pos < source.size() && source[pos] != '\n') pos++;
+            if (c == '/') { //for comments
+                if (pos + 1 < source.size() && source[pos + 1] == '/') {
+                    while (pos < source.size() && source[pos] != '\n') pos++;
+                    continue;
+                }
+                m_tokens.push_back({TokenKind::SLASH, "/", line, col}); pos++; col++;
                 continue;
             }
             if (c == ' ' || c == '\t') {
@@ -54,47 +60,48 @@ public:
                 continue;
             }
             if (c == '\n') {
-                tokens.push_back({TokenKind::NEWLINE, "\\n", line, col});
+                m_tokens.push_back({TokenKind::NEWLINE, "\\n", line, col});
                 pos++; line++; col = 1;
                 continue;
             }
-            if (c == '+') { tokens.push_back({TokenKind::PLUS, "+", line, col}); pos++; col++; continue; }
+            if (c == '+') { m_tokens.push_back({TokenKind::PLUS, "+", line, col}); pos++; col++; continue; }
             if (c == '-') {
                 if (pos + 1 < source.size() && (std::isdigit(source[pos+1]) || source[pos+1] == '.')) {
-                    if (tokens.empty() || tokens.back().kind == TokenKind::EQUALS ||
-                        tokens.back().kind == TokenKind::PLUS || tokens.back().kind == TokenKind::MINUS ||
-                        tokens.back().kind == TokenKind::STAR || tokens.back().kind == TokenKind::SLASH ||
-                        tokens.back().kind == TokenKind::LPAREN || tokens.back().kind == TokenKind::COMMA ||
-                        tokens.back().kind == TokenKind::NEWLINE) {
-                        tokens.push_back(readNumber());
+                    if (m_tokens.empty() || m_tokens.back().kind == TokenKind::EQUALS ||
+                        m_tokens.back().kind == TokenKind::PLUS || m_tokens.back().kind == TokenKind::MINUS ||
+                        m_tokens.back().kind == TokenKind::STAR || m_tokens.back().kind == TokenKind::SLASH ||
+                        m_tokens.back().kind == TokenKind::LPAREN || m_tokens.back().kind == TokenKind::COMMA ||
+                        m_tokens.back().kind == TokenKind::NEWLINE) {
+                        m_tokens.push_back(readNumber());
                         continue;
                     }
                 }
-                tokens.push_back({TokenKind::MINUS, "-", line, col}); pos++; col++;
+                m_tokens.push_back({TokenKind::MINUS, "-", line, col}); pos++; col++;
                 continue;
             }
-            if (c == '*') { tokens.push_back({TokenKind::STAR, "*", line, col}); pos++; col++; continue; }
-            if (c == '/') { tokens.push_back({TokenKind::SLASH, "/", line, col}); pos++; col++; continue; }
-            if (c == '=') { tokens.push_back({TokenKind::EQUALS, "=", line, col}); pos++; col++; continue; }
-            if (c == '<') { tokens.push_back({TokenKind::LESS, "<", line, col}); pos++; col++; continue; }
-            if (c == '>') { tokens.push_back({TokenKind::GREATER, ">", line, col}); pos++; col++; continue; }
-            if (c == '(') { tokens.push_back({TokenKind::LPAREN, "(", line, col}); pos++; col++; continue; }
-            if (c == ')') { tokens.push_back({TokenKind::RPAREN, ")", line, col}); pos++; col++; continue; }
-            if (c == ',') { tokens.push_back({TokenKind::COMMA, ",", line, col}); pos++; col++; continue; }
-            if (c == ':') { tokens.push_back({TokenKind::COLON, ":", line, col}); pos++; col++; continue; }
+            if (c == '*') { m_tokens.push_back({TokenKind::STAR, "*", line, col}); pos++; col++; continue; }
+            if (c == '=') { m_tokens.push_back({TokenKind::EQUALS, "=", line, col}); pos++; col++; continue; }
+            if (c == '<') { m_tokens.push_back({TokenKind::LESS, "<", line, col}); pos++; col++; continue; }
+            if (c == '>') { m_tokens.push_back({TokenKind::GREATER, ">", line, col}); pos++; col++; continue; }
+            if (c == '(') { m_tokens.push_back({TokenKind::LPAREN, "(", line, col}); pos++; col++; continue; }
+            if (c == ')') { m_tokens.push_back({TokenKind::RPAREN, ")", line, col}); pos++; col++; continue; }
+            if (c == '{') { m_tokens.push_back({TokenKind::LBRACE, "{", line, col}); pos++; col++; continue; }
+            if (c == '}') { m_tokens.push_back({TokenKind::RBRACE, "}", line, col}); pos++; col++; continue; }
+            if (c == ',') { m_tokens.push_back({TokenKind::COMMA, ",", line, col}); pos++; col++; continue; }
+            if (c == ':') { m_tokens.push_back({TokenKind::COLON, ":", line, col}); pos++; col++; continue; }
             if (std::isdigit(c) || c == '.') {
-                tokens.push_back(readNumber());
+                m_tokens.push_back(readNumber());
                 continue;
             }
             if (std::isalpha(c) || c == '_') {
-                tokens.push_back(readName());
+                m_tokens.push_back(readName());
                 continue;
             }
             std::cerr << "Unknown character '" << c << "' at line " << line << " col " << col << "\n";
             pos++; col++;
         }
-        tokens.push_back({TokenKind::TOK_EOF, "", line, col});
-        return tokens;
+        m_tokens.push_back({TokenKind::TOK_EOF, "", line, col});
+        return m_tokens;
     }
 
 private:
@@ -121,7 +128,7 @@ private:
 };
 
 class Parser {
-    std::vector<Token> tokens;
+    std::vector<Token> m_tokens;
     size_t current;
     mlir::OpBuilder builder;
     mlir::Location loc;
@@ -129,7 +136,7 @@ class Parser {
 
 public:
     Parser(std::vector<Token> toks, mlir::OpBuilder &b, mlir::Location l)
-        : tokens(std::move(toks)), current(0), builder(b), loc(l) {}
+        : m_tokens(std::move(toks)), current(0), builder(b), loc(l) {}
 
     bool parse(mlir::Block *block, mlir::ValueRange blockArgs) {
         variables["pos_x"] = blockArgs[0];
@@ -341,8 +348,8 @@ private:
         return builder.create<fungt::SelectOp>(loc, cond, trueVal, falseVal).getResult();
     }
 
-    Token &peek() { return tokens[current]; }
-    void advance() { if (current < tokens.size() - 1) current++; }
+    Token &peek() { return m_tokens[current]; }
+    void advance() { if (current < m_tokens.size() - 1) current++; }
     void skipNewlines() { while (peek().kind == TokenKind::NEWLINE) advance(); }
 
     bool expect(TokenKind kind) {
@@ -360,6 +367,250 @@ private:
         return false;
     }
 };
+class ShaderParser{
+
+    std::vector<Token> m_tokens;
+    size_t current;
+    mlir::OpBuilder builder;
+    mlir::Location loc;
+    std::unordered_map<std::string, mlir::Value> variables;
+
+    public:
+    ShaderParser(std::vector<Token> toks, mlir::OpBuilder &b, mlir::Location l)
+        : m_tokens(std::move(toks)), current(0), builder(b), loc(l) 
+    {
+
+    }
+        bool parseUniform(mlir::Block *block) {
+        advance(); // consume 'uniform'
+        if (peek().kind != TokenKind::NAME) return error("expected binding name");
+        std::string name = peek().text;
+        advance();
+
+        if (peek().text != "set") return error("expected 'set'");
+        advance();
+        if (!expect(TokenKind::LPAREN)) return error("expected '('");
+        if (peek().kind != TokenKind::NUMBER) return error("expected set index");
+        int set = std::stoi(peek().text);
+        advance();
+        if (!expect(TokenKind::RPAREN)) return error("expected ')'");
+
+        if (peek().text != "binding") return error("expected 'binding'");
+        advance();
+        if (!expect(TokenKind::LPAREN)) return error("expected '('");
+        if (peek().kind != TokenKind::NUMBER) return error("expected binding index");
+        int binding = std::stoi(peek().text);
+        advance();
+        if (!expect(TokenKind::RPAREN)) return error("expected ')'");
+
+        if (!expect(TokenKind::COLON)) return error("expected ':'");
+        mlir::Type type = parseType();
+        if (!type) return false;
+
+        {
+            mlir::OpBuilder::InsertionGuard guard(builder);
+            builder.setInsertionPointToEnd(block);
+            builder.create<fungt::ResourceBindingOp>(
+                loc,
+                builder.getStringAttr(name),
+                builder.getStringAttr("Uniform"),
+                builder.getI32IntegerAttr(set),
+                builder.getI32IntegerAttr(binding),
+                mlir::TypeAttr::get(type));
+        }
+        return true;
+    }
+
+    bool parseInput() {
+        advance(); // consume 'in'
+        if (peek().kind != TokenKind::NAME) return error("expected input name");
+        std::string name = peek().text;
+        advance();
+        if (peek().text != "location") return error("expected 'location'");
+        advance();
+        if (!expect(TokenKind::LPAREN)) return error("expected '('");
+        if (peek().kind != TokenKind::NUMBER) return error("expected location index");
+        int location = std::stoi(peek().text);
+        advance();
+        if (!expect(TokenKind::RPAREN)) return error("expected ')'");
+        if (!expect(TokenKind::COLON)) return error("expected ':'");
+        mlir::Type type = parseType();
+        if (!type) return false;
+
+        auto inputOp = builder.create<fungt::InputOp>(
+            loc, type,
+            builder.getI32IntegerAttr(location));
+        variables[name] = inputOp.getResult();
+        return true;
+    }
+
+    bool parseOutput() {
+        advance(); // consume 'out'
+        if (peek().kind != TokenKind::NAME) return error("expected output name");
+        std::string name = peek().text;
+        advance();
+        if (peek().text != "location") return error("expected 'location'");
+        advance();
+        if (!expect(TokenKind::LPAREN)) return error("expected '('");
+        if (peek().kind != TokenKind::NUMBER) return error("expected location index");
+        int location = std::stoi(peek().text);
+        advance();
+        if (!expect(TokenKind::RPAREN)) return error("expected ')'");
+
+        auto it = variables.find(name);
+        if (it == variables.end()) return error("undefined variable: " + name);
+
+        builder.create<fungt::OutputOp>(
+            loc, it->second,
+            builder.getI32IntegerAttr(location));
+        return true;
+    }
+
+    bool parseAssignment() {
+        std::string name = peek().text;
+        advance();
+        if (!expect(TokenKind::EQUALS)) return error("expected '='");
+        mlir::Value val = parseLoadExpr();
+        if (!val) return false;
+        variables[name] = val;
+        return true;
+    }
+
+    mlir::Value parseLoadExpr() {
+        if (peek().kind == TokenKind::NAME && peek().text == "load") {
+            advance();
+            if (!expect(TokenKind::LPAREN)) { error("expected '('"); return nullptr; }
+            if (peek().kind != TokenKind::NAME) { error("expected resource name"); return nullptr; }
+            std::string resName = peek().text;
+            advance();
+            if (!expect(TokenKind::RPAREN)) { error("expected ')'"); return nullptr; }
+            auto vecType = mlir::VectorType::get({4}, builder.getF32Type());
+            return builder.create<fungt::LoadResourceOp>(
+                loc, vecType,
+                mlir::FlatSymbolRefAttr::get(builder.getContext(), resName)).getResult();
+        }
+        if (peek().kind == TokenKind::NAME) {
+            std::string name = peek().text;
+            advance();
+            auto it = variables.find(name);
+            if (it == variables.end()) { error("undefined variable: " + name); return nullptr; }
+            return it->second;
+        }
+        error("unexpected token in expression: " + peek().text);
+        return nullptr;
+    }
+    bool parseFragmentShader(mlir::Block *moduleBlock) {
+        advance(); // consume 'fragment_shader'
+        if (!expect(TokenKind::LBRACE)) return error("expected '{'");
+
+        auto shaderOp = builder.create<fungt::ShaderEntryOp>(
+            loc,
+            builder.getStringAttr("main"),
+            builder.getStringAttr("Fragment")
+        );
+
+        auto *shaderBlock = new mlir::Block();
+        shaderOp.getBody().push_back(shaderBlock);
+        builder.setInsertionPointToStart(shaderBlock);
+
+        skipNewlines();
+        while (peek().kind != TokenKind::RBRACE && peek().kind != TokenKind::TOK_EOF) {
+            skipNewlines();
+            if (peek().kind == TokenKind::RBRACE) break;
+            if (peek().kind == TokenKind::NAME) {
+                if (peek().text == "uniform") {
+                   if (!parseUniform(moduleBlock)) return false;
+                } else if (peek().text == "in") {
+                    if (!parseInput()) return false;
+                } else if (peek().text == "out") {
+                    if (!parseOutput()) return false;
+                } else {
+                    if (!parseAssignment()) return false;
+                }
+            }
+            skipNewlines();
+        }
+
+        builder.create<fungt::ShaderEndOp>(loc);
+        if (!expect(TokenKind::RBRACE)) return error("expected '}'");
+        return true;
+    }
+
+    bool parseVertexShader(mlir::Block *moduleBlock) {
+        advance(); // consume 'vertex_shader'
+        if (!expect(TokenKind::LBRACE)) return error("expected '{'");
+
+        auto shaderOp = builder.create<fungt::ShaderEntryOp>(
+            loc,
+            builder.getStringAttr("main"),
+            builder.getStringAttr("Vertex"));
+
+        auto *shaderBlock = new mlir::Block();
+        shaderOp.getBody().push_back(shaderBlock);
+        builder.setInsertionPointToStart(shaderBlock);
+
+        skipNewlines();
+        while (peek().kind != TokenKind::RBRACE && peek().kind != TokenKind::TOK_EOF) {
+            skipNewlines();
+            if (peek().kind == TokenKind::RBRACE) break;
+            if (peek().kind == TokenKind::NAME) {
+                if (peek().text == "uniform") {
+                    if (!parseUniform(moduleBlock)) return false;
+                } else if (peek().text == "in") {
+                    if (!parseInput()) return false;
+                } else if (peek().text == "out") {
+                    if (!parseOutput()) return false;
+                } else {
+                    if (!parseAssignment()) return false;
+                }
+            }
+            skipNewlines();
+        }
+
+        builder.create<fungt::ShaderEndOp>(loc);
+        if (!expect(TokenKind::RBRACE)) return error("expected '}'");
+        return true;
+    }
+    bool parse(mlir::Block *moduleBlock) {
+        skipNewlines();
+        if (peek().kind == TokenKind::NAME && peek().text == "fragment_shader") {
+            return parseFragmentShader(moduleBlock);
+        }
+        if (peek().kind == TokenKind::NAME && peek().text == "vertex_shader") {
+            return parseVertexShader(moduleBlock);
+        }
+        return error("expected 'fragment_shader' or 'vertex_shader'");
+    }
+    private:
+
+     mlir::Type parseType() {
+        if (peek().kind == TokenKind::NAME && peek().text == "vec4") {
+            advance();
+            return mlir::VectorType::get({4}, builder.getF32Type());
+        }
+        error("unknown type: " + peek().text);
+        return nullptr;
+    }
+
+    Token &peek() { return m_tokens[current]; }
+    void advance() { if (current < m_tokens.size() - 1) current++; }
+    void skipNewlines() { while (peek().kind == TokenKind::NEWLINE) advance(); }
+
+    bool expect(TokenKind kind) {
+        if (peek().kind == kind) { advance(); return true; }
+        return false;
+    }
+
+    bool error(const std::string &msg) {
+        std::cerr << "Shader parse error at line " << peek().line
+                  << " col " << peek().col << ": " << msg << "\n";
+        return false;
+    }
+
+};
+
+
+
 
 mlir::OwningOpRef<mlir::ModuleOp>
 parseFunGTIR(mlir::MLIRContext &ctx, llvm::StringRef source) {
@@ -400,8 +651,8 @@ parseFunGTIR(mlir::MLIRContext &ctx, llvm::StringRef source) {
     builder.setInsertionPointToStart(updateBlock);
 
     Tokenizer tokenizer(source);
-    auto tokens = tokenizer.tokenize();
-    Parser parser(std::move(tokens), builder, loc);
+    auto m_tokens = tokenizer.tokenize();
+    Parser parser(std::move(m_tokens), builder, loc);
 
     if (!parser.parse(updateBlock, updateBlock->getArguments())) {
         return nullptr;
@@ -410,6 +661,26 @@ parseFunGTIR(mlir::MLIRContext &ctx, llvm::StringRef source) {
     builder.setInsertionPointToEnd(entryBlock);
     builder.create<mlir::func::ReturnOp>(loc, updateOp.getResults());
 
+    return moduleOp;
+}
+
+mlir::OwningOpRef<mlir::ModuleOp> parseShaderIR(mlir::MLIRContext &ctx, llvm::StringRef source)
+{
+    ctx.loadDialect<fungt::FunGTDialect>();
+    ctx.loadDialect<arith::ArithDialect>();
+    ctx.loadDialect<spirv::SPIRVDialect>();
+
+    auto loc = mlir::UnknownLoc::get(&ctx);
+    mlir::OpBuilder builder(&ctx);
+
+    auto moduleOp = mlir::ModuleOp::create(loc);
+    builder.setInsertionPointToEnd(moduleOp.getBody());
+
+    Tokenizer tokenizer(source);
+    auto m_tokens = tokenizer.tokenize();
+    ShaderParser parser(std::move(m_tokens), builder, loc);
+
+    if (!parser.parse(moduleOp.getBody())) return nullptr;
     return moduleOp;
 }
 
