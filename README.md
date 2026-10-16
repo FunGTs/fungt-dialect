@@ -30,19 +30,23 @@ Users write `.fgt` files directly. No MLIR knowledge required.
 Fragment shader reading from a uniform and writing to an output:
 
 ```
-fragment_shader {
-    uniform tint set(0) binding(0) : vec4
-    color = load(tint)
-    out color location(0)
+// fragment shader
+uniform color set(0) binding(0) : vec4
+out out_color location(0)
+
+main_fs {
+    out_color = load(color)
 }
+
 ```
 
 Vertex shader passing an input through to an output:
 
 ```
-vertex_shader {
-    in position location(0) : vec4
-    out gl_position location(0) : vec4
+in position location(0) : vec4
+out gl_position location(0) : vec4
+main_vs {
+
     gl_position = position
 }
 ```
