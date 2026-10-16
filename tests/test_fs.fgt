@@ -1,0 +1,7 @@
+// fragment shader
+uniform color set(0) binding(0) : vec4
+out out_color location(0)
+
+main_fs {
+    out_color = load(color)
+}

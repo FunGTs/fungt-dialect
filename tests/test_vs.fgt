@@ -1,0 +1,7 @@
+// vertex shader
+in position location(0) : vec4
+out gl_position location(0)
+
+main_vs {
+    gl_position = position
+}
