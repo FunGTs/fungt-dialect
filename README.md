@@ -31,7 +31,7 @@ Fragment shader reading from a uniform and writing to an output:
 
 ```
 fragment_shader {
-    uniform tint set(0) binding(0) : vec4
+    uniform color set(0) binding(0) : vec4
     color = load(tint)
     out color location(0)
 }

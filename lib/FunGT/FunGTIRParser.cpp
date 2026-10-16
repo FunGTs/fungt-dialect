@@ -374,7 +374,7 @@ class ShaderParser{
     mlir::OpBuilder builder;
     mlir::Location loc;
     std::unordered_map<std::string, mlir::Value> variables;
-
+    std::unordered_map<std::string, int> outputs;
     public:
     ShaderParser(std::vector<Token> toks, mlir::OpBuilder &b, mlir::Location l)
         : m_tokens(std::move(toks)), current(0), builder(b), loc(l) 
@@ -456,13 +456,7 @@ class ShaderParser{
         int location = std::stoi(peek().text);
         advance();
         if (!expect(TokenKind::RPAREN)) return error("expected ')'");
-
-        auto it = variables.find(name);
-        if (it == variables.end()) return error("undefined variable: " + name);
-
-        builder.create<fungt::OutputOp>(
-            loc, it->second,
-            builder.getI32IntegerAttr(location));
+        outputs[name] = location;
         return true;
     }
 
@@ -500,14 +494,13 @@ class ShaderParser{
         return nullptr;
     }
     bool parseFragmentShader(mlir::Block *moduleBlock) {
-        advance(); // consume 'fragment_shader'
+        advance(); // consume 'main_vs'
         if (!expect(TokenKind::LBRACE)) return error("expected '{'");
 
         auto shaderOp = builder.create<fungt::ShaderEntryOp>(
             loc,
             builder.getStringAttr("main"),
-            builder.getStringAttr("Fragment")
-        );
+            builder.getStringAttr("Fragment"));
 
         auto *shaderBlock = new mlir::Block();
         shaderOp.getBody().push_back(shaderBlock);
@@ -518,22 +511,23 @@ class ShaderParser{
             skipNewlines();
             if (peek().kind == TokenKind::RBRACE) break;
             if (peek().kind == TokenKind::NAME) {
-                if (peek().text == "uniform") {
-                   if (!parseUniform(moduleBlock)) return false;
-                } else if (peek().text == "in") {
-                    if (!parseInput()) return false;
-                } else if (peek().text == "out") {
-                    if (!parseOutput()) return false;
-                } else {
-                    if (!parseAssignment()) return false;
-                }
+                if (!parseAssignment()) return false;
             }
             skipNewlines();
+        }
+
+        for (auto &[name, location] : outputs) {
+            auto it = variables.find(name);
+            if (it == variables.end()) return error("undefined output variable: " + name);
+            builder.create<fungt::OutputOp>(
+                loc, it->second,
+                builder.getI32IntegerAttr(location));
         }
 
         builder.create<fungt::ShaderEndOp>(loc);
         if (!expect(TokenKind::RBRACE)) return error("expected '}'");
         return true;
+
     }
 
     bool parseVertexShader(mlir::Block *moduleBlock) {
@@ -573,13 +567,27 @@ class ShaderParser{
     }
     bool parse(mlir::Block *moduleBlock) {
         skipNewlines();
-        if (peek().kind == TokenKind::NAME && peek().text == "fragment_shader") {
-            return parseFragmentShader(moduleBlock);
+        while (peek().kind != TokenKind::TOK_EOF) {
+            skipNewlines();
+            if (peek().kind == TokenKind::TOK_EOF) break;
+            if (peek().kind != TokenKind::NAME) return error("unexpected token: " + peek().text);
+
+            if (peek().text == "in") {
+                if (!parseInput()) return false;
+            } else if (peek().text == "out") {
+                if (!parseOutput()) return false;
+            } else if (peek().text == "uniform") {
+                if (!parseUniform(moduleBlock)) return false;
+            } else if (peek().text == "main_fs") {
+                return parseFragmentShader(moduleBlock);
+            } else if (peek().text == "main_vs") {
+                return parseVertexShader(moduleBlock);
+            } else {
+                return error("unexpected token: " + peek().text);
+            }
+            skipNewlines();
         }
-        if (peek().kind == TokenKind::NAME && peek().text == "vertex_shader") {
-            return parseVertexShader(moduleBlock);
-        }
-        return error("expected 'fragment_shader' or 'vertex_shader'");
+        return error("expected 'main_vs' or 'main_fs'");
     }
     private:
 
