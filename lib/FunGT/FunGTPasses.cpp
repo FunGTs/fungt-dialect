@@ -337,6 +337,17 @@ public:
   }
 };
 
+class FunGTVerifyUniqueBindings : public impl::FunGTVerifyUniqueBindingsBase<FunGTVerifyUniqueBindings>
+{
+    public: 
+        using impl::FunGTVerifyUniqueBindingsBase<FunGTVerifyUniqueBindings>::FunGTVerifyUniqueBindingsBase;
+        void runOnOperation() final { //No more overriding from here
+            
+
+        }
+
+}
+
 } // namespace
 // ================= HERE ENDS: FunGTShaderLowerToSPIRV =================
 
