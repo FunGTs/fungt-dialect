@@ -139,7 +139,7 @@ def FunGT_ConstVec4Op : FunGT_Op<"const_vec4",[Pure]>{
 }
 def FunGT_OutputOp : FunGT_Op<"output", []> {
   let summary = "Writes a value to a location decorated shader output.";
-  let arguments = (ins AnyType:$value, ConfinedAttr<I32Attr, [IntNonNegative]>:$location);
+  let arguments = (ins AnyType:$value, ConfinedAttr<I32Attr, [IntNonNegative]>:$location,DefaultValuedAttr<BoolAttr, "false">:$is_builtin);
   let assemblyFormat = [{
     $value `location` `(` $location `)` attr-dict `:` type($value)
   }];

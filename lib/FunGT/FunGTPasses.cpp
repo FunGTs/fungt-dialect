@@ -337,19 +337,44 @@ public:
   }
 };
 
+} // namespace
+// ================= HERE ENDS: FunGTShaderLowerToSPIRV =================
+
+
+//================== HERE STARTS: FunGTVerifyUniqueBindings =============
+#define GEN_PASS_DEF_FUNGTVERIFYUNIQUEBINDINGS
+#include "FunGT/FunGTPasses.h.inc"
+
+namespace{
+
+
 class FunGTVerifyUniqueBindings : public impl::FunGTVerifyUniqueBindingsBase<FunGTVerifyUniqueBindings>
 {
     public: 
         using impl::FunGTVerifyUniqueBindingsBase<FunGTVerifyUniqueBindings>::FunGTVerifyUniqueBindingsBase;
         void runOnOperation() final { //No more overriding from here
-            
+            llvm::DenseMap<int64_t, ResourceBindingOp> _map; 
 
+            getOperation()->walk([&](ResourceBindingOp op){
+
+                int64_t key =  (static_cast<int64_t>(op.getSet()) << 32 | static_cast<uint32_t>(op.getBinding()));
+                auto [  it, insterted ] = _map.try_emplace(key, op); //returns an iterator and a bool
+                if(!insterted){
+                    op.emitError("duplicate descriptor binding at set=")
+                        << op.getSet() << " binding=" << op.getBinding()
+                        << ", previously declared here";
+                    it->second.emitRemark("previous declaration");
+                    signalPassFailure();
+                }
+
+            });
+
+
+            //int64_t packed = op.getSet() << 32 | op.getBinding();
         }
 
+};
+
 }
-
-} // namespace
-// ================= HERE ENDS: FunGTShaderLowerToSPIRV =================
-
 
 } // namespace mlir::fungt

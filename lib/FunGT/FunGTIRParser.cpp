@@ -367,14 +367,18 @@ private:
         return false;
     }
 };
+struct OutputDecl {
+    bool isBuiltin;
+    int location;
+};
 class ShaderParser{
-
+ 
     std::vector<Token> m_tokens;
     size_t current;
     mlir::OpBuilder builder;
     mlir::Location loc;
     std::unordered_map<std::string, mlir::Value> variables;
-    std::unordered_map<std::string, int> outputs;
+    std::unordered_map<std::string, OutputDecl> outputs;
     std::unordered_map<std::string, int> inputs;
     public:
     ShaderParser(std::vector<Token> toks, mlir::OpBuilder &b, mlir::Location l)
@@ -447,6 +451,18 @@ class ShaderParser{
         if (peek().kind != TokenKind::NAME) return error("expected output name");
         std::string name = peek().text;
         advance();
+
+        if (peek().text == "builtin") {
+            advance();
+            if (!expect(TokenKind::LPAREN)) return error("expected '('");
+            if (peek().kind != TokenKind::NAME) return error("expected builtin name");
+            std::string builtinName = peek().text;
+            advance();
+            if (!expect(TokenKind::RPAREN)) return error("expected ')'");
+            if (builtinName != "position") return error("unknown builtin: " + builtinName);
+            outputs[name] = OutputDecl{true, 0};
+            return true;
+        }
         if (peek().text != "location") return error("expected 'location'");
         advance();
         if (!expect(TokenKind::LPAREN)) return error("expected '('");
@@ -454,7 +470,7 @@ class ShaderParser{
         int location = std::stoi(peek().text);
         advance();
         if (!expect(TokenKind::RPAREN)) return error("expected ')'");
-        outputs[name] = location;
+        outputs[name] = OutputDecl{false, location};
         return true;
     }
 
@@ -520,12 +536,13 @@ class ShaderParser{
             skipNewlines();
         }
 
-        for (auto &[name, location] : outputs) {
+        for (auto &[name, out_decl] : outputs) {
             auto it = variables.find(name);
             if (it == variables.end()) return error("undefined output variable: " + name);
             builder.create<fungt::OutputOp>(
                 loc, it->second,
-                builder.getI32IntegerAttr(location));
+                builder.getI32IntegerAttr(out_decl.location),
+                builder.getBoolAttr(out_decl.isBuiltin));
         }
 
         builder.create<fungt::ShaderEndOp>(loc);
@@ -565,12 +582,14 @@ class ShaderParser{
             skipNewlines();
         }
 
-        for (auto &[name, location] : outputs) {
+        for (auto &[name, out_decl] : outputs) {
             auto it = variables.find(name);
             if (it == variables.end()) return error("undefined output variable: " + name);
             builder.create<fungt::OutputOp>(
                 loc, it->second,
-                builder.getI32IntegerAttr(location));
+                builder.getI32IntegerAttr(out_decl.location),
+                builder.getBoolAttr(out_decl.isBuiltin)
+                );
         }
 
         builder.create<fungt::ShaderEndOp>(loc);
