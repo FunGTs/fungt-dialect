@@ -49,14 +49,14 @@ def FunGTShaderLowerToSPIRV: Pass<"fungt-shader-lower-to-spirv", "::mlir::Module
     "mlir::spirv::SPIRVDialect"
   ];
 }
-def FunGTVerifyUniqueBindings : Pass<"fgt-verify-unique-bindingds">{
-  let summary = "Reject Modules with duplicate descriptor bindings"
+def FunGTVerifyUniqueBindings : Pass<"fgt-verify-unique-bindings">{
+  let summary = "Reject Modules with duplicate descriptor bindings";
   let description = [{
    Walks all fungt.resource_bindings ops in the module and emits an 
    error if any two ops share the same ( set, binding ) pair. Must be run 
    before fungt-shader-lower-to-spirv
   
-  }]
+  }];
 
 
 }
